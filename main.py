@@ -16,7 +16,7 @@ log = CPLog(__name__)
 class nCore(TorrentProvider, MovieProvider):
     urls = {
         'login': 'https://ncore.cc/login.php',
-        'search': 'https://ncore.cc/torrents.php?kivalasztott_tipus=%s&mire=%s&miben=name&tipus=kivalasztottak_kozott&submit.x=0&submit.y=0&submit=Ok&tags=&searchedfrompotato=true&jsons=true'
+        'search': 'https://ncore.cc/torrents.php?oldal=%s&kivalasztott_tipus=%s&mire=%s&miben=name&tipus=kivalasztottak_kozott&submit.x=0&submit.y=0&submit=Ok&tags=&searchedfrompotato=true&jsons=true'
     }
 
     http_time_between_calls = 1  # seconds
@@ -29,12 +29,29 @@ class nCore(TorrentProvider, MovieProvider):
         self.doSearch(title, self.conf('en_categories'), en_extra_score, results)
 
     def doSearch(self, title, categories, extra_score, results):
-        url = self.urls['search'] % (categories, tryUrlencode(title))
+        url = self.urls['search'] % (1, categories, tryUrlencode(title))
         try:
-            data = self.getJsonData(url)
-            log.info('Number of torrents found on nCore = ' + str(data['total_results']))
-            for d in data['results']:
-                results.append({
+            data = self.getJsonData(url, data='some random stuff just to ignore cache')
+            log.info('Number of torrents found on nCore = ' + data['total_results'])
+
+            total_result_count = int(data['total_results'])
+            item_per_page_count = int(data['perpage'])
+
+            page_count = total_result_count / item_per_page_count
+            left_over = total_result_count % item_per_page_count
+            if left_over > 0:
+                page_count += 1
+
+            ncore_results = data['results']
+            page_index = 2
+            while page_index <= page_count:
+                url = self.urls['search'] % (page_index, categories, tryUrlencode(title))
+                data = self.getJsonData(url, data='some random stuff just to ignore cache')
+                ncore_results.extend(data['results'])
+                page_index += 1
+
+            for d in ncore_results:
+                to_append = {
                     'id': d['torrent_id'],
                     'leechers': d['leechers'],
                     'seeders': d['seeders'],
@@ -42,8 +59,14 @@ class nCore(TorrentProvider, MovieProvider):
                     'url': d['download_url'],
                     'detail_url': d['details_url'],
                     'size': tryInt(d['size']) / (1024 * 1024),
-                    'score': extra_score,
-                })
+                    'score': extra_score
+                }
+
+                imdb_id = d.get('imdb_id')
+                if imdb_id and isinstance(imdb_id, unicode):
+                    to_append.update({'description': imdb_id})
+
+                results.append(to_append)
         except:
             log.error('Failed getting results from %s: %s', (self.getName(), traceback.format_exc()))
 
