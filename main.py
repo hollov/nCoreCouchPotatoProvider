@@ -31,7 +31,11 @@ class nCore(TorrentProvider, MovieProvider):
     def doSearch(self, title, categories, extra_score, results):
         url = self.urls['search'] % (1, categories, tryUrlencode(title))
         try:
-            data = self.getJsonData(url, data='some random stuff just to ignore cache')
+            data = self.getJsonData(url)
+            if not data:
+                log.info('No results found on nCore')
+                return
+
             log.info('Number of torrents found on nCore = ' + data['total_results'])
 
             total_result_count = int(data['total_results'])
@@ -46,7 +50,7 @@ class nCore(TorrentProvider, MovieProvider):
             page_index = 2
             while page_index <= page_count:
                 url = self.urls['search'] % (page_index, categories, tryUrlencode(title))
-                data = self.getJsonData(url, data='some random stuff just to ignore cache')
+                data = self.getJsonData(url)
                 ncore_results.extend(data['results'])
                 page_index += 1
 
